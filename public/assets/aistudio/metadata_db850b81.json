@@ -1,0 +1,6 @@
+{
+  "name": "Первичка Про",
+  "description": "Создание счёта-фактуры и товарной накладной ТОРГ-12 по ИНН с автозаполнением реквизитов из ЕГРЮЛ/ЕГРИП и экспортом в PDF",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

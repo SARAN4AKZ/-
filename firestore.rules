@@ -1,0 +1,256 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isStr(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isNumNonNeg(val) {
+      return (val is int || val is float) && val >= 0;
+    }
+
+    function isValidOrganization(data, userId) {
+      return data.userId == userId &&
+             isStr(data.name, 1, 300) &&
+             isStr(data.inn, 10, 12) &&
+             isStr(data.kpp, 0, 9) &&
+             isStr(data.ogrn, 0, 15) &&
+             isStr(data.address, 0, 500) &&
+             isStr(data.phone, 0, 40) &&
+             isStr(data.bankName, 0, 200) &&
+             isStr(data.bik, 0, 9) &&
+             isStr(data.checkingAccount, 0, 20) &&
+             isStr(data.correspondentAccount, 0, 20) &&
+             isStr(data.directorTitle, 0, 100) &&
+             isStr(data.directorName, 0, 120) &&
+             isStr(data.accountantName, 0, 120) &&
+             data.defaultVatRate is int &&
+             data.defaultVatRate in [-1, 0, 5, 7, 10, 20] &&
+             data.defaultProfile is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidCounterparty(data, userId) {
+      return data.userId == userId &&
+             isStr(data.name, 1, 300) &&
+             isStr(data.inn, 10, 12) &&
+             isStr(data.kpp, 0, 9) &&
+             isStr(data.ogrn, 0, 15) &&
+             isStr(data.address, 0, 500) &&
+             isStr(data.phone, 0, 40) &&
+             isStr(data.bankName, 0, 200) &&
+             isStr(data.bik, 0, 9) &&
+             isStr(data.checkingAccount, 0, 20) &&
+             isStr(data.correspondentAccount, 0, 20) &&
+             isStr(data.directorName, 0, 120) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidDocument(data, userId) {
+      return data.userId == userId &&
+             data.docType in ['INVOICE', 'TORG12'] &&
+             isStr(data.docNumber, 1, 50) &&
+             isStr(data.docDate, 1, 20) &&
+             isStr(data.basisDoc, 0, 200) &&
+             isStr(data.paymentDoc, 0, 200) &&
+             data.status in ['DRAFT', 'ISSUED'] &&
+             isStr(data.sellerName, 1, 300) &&
+             isStr(data.sellerInn, 10, 12) &&
+             isStr(data.sellerKpp, 0, 9) &&
+             isStr(data.sellerOgrn, 0, 15) &&
+             isStr(data.sellerAddress, 0, 500) &&
+             isStr(data.sellerPhone, 0, 40) &&
+             isStr(data.sellerBankName, 0, 200) &&
+             isStr(data.sellerBik, 0, 9) &&
+             isStr(data.sellerCheckingAccount, 0, 20) &&
+             isStr(data.sellerCorrAccount, 0, 20) &&
+             isStr(data.sellerDirectorTitle, 0, 100) &&
+             isStr(data.sellerDirectorName, 0, 120) &&
+             isStr(data.sellerAccountantName, 0, 120) &&
+             isStr(data.buyerName, 1, 300) &&
+             isStr(data.buyerInn, 10, 12) &&
+             isStr(data.buyerKpp, 0, 9) &&
+             isStr(data.buyerOgrn, 0, 15) &&
+             isStr(data.buyerAddress, 0, 500) &&
+             isStr(data.buyerPhone, 0, 40) &&
+             isStr(data.buyerBankName, 0, 200) &&
+             isStr(data.buyerBik, 0, 9) &&
+             isStr(data.buyerCheckingAccount, 0, 20) &&
+             isStr(data.buyerCorrAccount, 0, 20) &&
+             isStr(data.consignorInfo, 0, 600) &&
+             isStr(data.consigneeInfo, 0, 600) &&
+             data.items is list &&
+             data.items.size() >= 1 &&
+             data.items.size() <= 50 &&
+             data.items[0] is map &&
+             isNumNonNeg(data.subtotalWithoutVat) &&
+             isNumNonNeg(data.totalVat) &&
+             isNumNonNeg(data.totalWithVat) &&
+             isNumNonNeg(data.totalQuantity) &&
+             data.totalPlaces is int && data.totalPlaces >= 0 &&
+             isNumNonNeg(data.totalWeightKg) &&
+             isStr(data.amountInWords, 0, 400) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId}/organizations/{orgId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(orgId);
+      allow create: if isOwner(userId) &&
+                       isValidId(orgId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'name', 'inn', 'kpp', 'ogrn', 'address', 'phone',
+                         'bankName', 'bik', 'checkingAccount', 'correspondentAccount',
+                         'directorTitle', 'directorName', 'accountantName',
+                         'defaultVatRate', 'defaultProfile', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'name', 'inn', 'kpp', 'ogrn', 'address', 'phone',
+                         'bankName', 'bik', 'checkingAccount', 'correspondentAccount',
+                         'directorTitle', 'directorName', 'accountantName',
+                         'defaultVatRate', 'defaultProfile', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidOrganization(incoming(), userId);
+      allow update: if isOwner(userId) &&
+                       isValidId(orgId) &&
+                       isValidOrganization(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'name', 'inn', 'kpp', 'ogrn', 'address', 'phone',
+                         'bankName', 'bik', 'checkingAccount', 'correspondentAccount',
+                         'directorTitle', 'directorName', 'accountantName',
+                         'defaultVatRate', 'defaultProfile', 'updatedAt'
+                       ]);
+      allow delete: if isOwner(userId) && isValidId(orgId);
+    }
+
+    match /users/{userId}/counterparties/{partyId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(partyId);
+      allow create: if isOwner(userId) &&
+                       isValidId(partyId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'name', 'inn', 'kpp', 'ogrn', 'address', 'phone',
+                         'bankName', 'bik', 'checkingAccount', 'correspondentAccount',
+                         'directorName', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'name', 'inn', 'kpp', 'ogrn', 'address', 'phone',
+                         'bankName', 'bik', 'checkingAccount', 'correspondentAccount',
+                         'directorName', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidCounterparty(incoming(), userId);
+      allow update: if isOwner(userId) &&
+                       isValidId(partyId) &&
+                       isValidCounterparty(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'name', 'inn', 'kpp', 'ogrn', 'address', 'phone',
+                         'bankName', 'bik', 'checkingAccount', 'correspondentAccount',
+                         'directorName', 'updatedAt'
+                       ]);
+      allow delete: if isOwner(userId) && isValidId(partyId);
+    }
+
+    match /users/{userId}/documents/{docId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(docId);
+      allow create: if isOwner(userId) &&
+                       isValidId(docId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'docType', 'docNumber', 'docDate', 'basisDoc', 'paymentDoc', 'status',
+                         'sellerName', 'sellerInn', 'sellerKpp', 'sellerOgrn', 'sellerAddress', 'sellerPhone',
+                         'sellerBankName', 'sellerBik', 'sellerCheckingAccount', 'sellerCorrAccount',
+                         'sellerDirectorTitle', 'sellerDirectorName', 'sellerAccountantName',
+                         'buyerName', 'buyerInn', 'buyerKpp', 'buyerOgrn', 'buyerAddress', 'buyerPhone',
+                         'buyerBankName', 'buyerBik', 'buyerCheckingAccount', 'buyerCorrAccount',
+                         'consignorInfo', 'consigneeInfo', 'items',
+                         'subtotalWithoutVat', 'totalVat', 'totalWithVat',
+                         'totalQuantity', 'totalPlaces', 'totalWeightKg', 'amountInWords',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'docType', 'docNumber', 'docDate', 'basisDoc', 'paymentDoc', 'status',
+                         'sellerName', 'sellerInn', 'sellerKpp', 'sellerOgrn', 'sellerAddress', 'sellerPhone',
+                         'sellerBankName', 'sellerBik', 'sellerCheckingAccount', 'sellerCorrAccount',
+                         'sellerDirectorTitle', 'sellerDirectorName', 'sellerAccountantName',
+                         'buyerName', 'buyerInn', 'buyerKpp', 'buyerOgrn', 'buyerAddress', 'buyerPhone',
+                         'buyerBankName', 'buyerBik', 'buyerCheckingAccount', 'buyerCorrAccount',
+                         'consignorInfo', 'consigneeInfo', 'items',
+                         'subtotalWithoutVat', 'totalVat', 'totalWithVat',
+                         'totalQuantity', 'totalPlaces', 'totalWeightKg', 'amountInWords',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidDocument(incoming(), userId);
+      allow update: if isOwner(userId) &&
+                       isValidId(docId) &&
+                       isValidDocument(incoming(), userId) &&
+                       existing().status == 'DRAFT' &&
+                       incoming().userId == existing().userId &&
+                       incoming().docType == existing().docType &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (
+                           incoming().status == 'DRAFT' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'docNumber', 'docDate', 'basisDoc', 'paymentDoc',
+                             'sellerName', 'sellerInn', 'sellerKpp', 'sellerOgrn', 'sellerAddress', 'sellerPhone',
+                             'sellerBankName', 'sellerBik', 'sellerCheckingAccount', 'sellerCorrAccount',
+                             'sellerDirectorTitle', 'sellerDirectorName', 'sellerAccountantName',
+                             'buyerName', 'buyerInn', 'buyerKpp', 'buyerOgrn', 'buyerAddress', 'buyerPhone',
+                             'buyerBankName', 'buyerBik', 'buyerCheckingAccount', 'buyerCorrAccount',
+                             'consignorInfo', 'consigneeInfo', 'items',
+                             'subtotalWithoutVat', 'totalVat', 'totalWithVat',
+                             'totalQuantity', 'totalPlaces', 'totalWeightKg', 'amountInWords',
+                             'updatedAt'
+                           ])
+                         ) ||
+                         (
+                           incoming().status == 'ISSUED' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'docNumber', 'docDate', 'basisDoc', 'paymentDoc', 'status',
+                             'sellerName', 'sellerInn', 'sellerKpp', 'sellerOgrn', 'sellerAddress', 'sellerPhone',
+                             'sellerBankName', 'sellerBik', 'sellerCheckingAccount', 'sellerCorrAccount',
+                             'sellerDirectorTitle', 'sellerDirectorName', 'sellerAccountantName',
+                             'buyerName', 'buyerInn', 'buyerKpp', 'buyerOgrn', 'buyerAddress', 'buyerPhone',
+                             'buyerBankName', 'buyerBik', 'buyerCheckingAccount', 'buyerCorrAccount',
+                             'consignorInfo', 'consigneeInfo', 'items',
+                             'subtotalWithoutVat', 'totalVat', 'totalWithVat',
+                             'totalQuantity', 'totalPlaces', 'totalWeightKg', 'amountInWords',
+                             'updatedAt'
+                           ])
+                         )
+                       );
+      allow delete: if isOwner(userId) && isValidId(docId);
+    }
+  }
+}
